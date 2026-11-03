@@ -347,8 +347,8 @@ private struct RuleRow: View {
 
 private struct TargetRow: View {
     let target: Target
-    var onEdit: () -> Void = {}
-    let onToggle: (Bool) -> Void
+    var onEdit: @MainActor () -> Void = {}
+    let onToggle: @MainActor (Bool) -> Void
 
     private var healthColor: Color {
         switch target.hcHealth {
