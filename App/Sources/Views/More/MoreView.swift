@@ -19,6 +19,14 @@ struct MoreView: View {
                 }
             }
 
+            GlassSectionHeader(title: "Überwachung", systemImage: "waveform.path.ecg")
+            GlassEffectContainer(spacing: 10) {
+                VStack(spacing: 10) {
+                    link("Health-Checks", systemImage: "waveform.path.ecg", destination: .healthChecks)
+                    link("Alert-Regeln", systemImage: "bell.badge", destination: .alertRules)
+                }
+            }
+
             GlassSectionHeader(title: "App", systemImage: "gearshape")
             Button {
                 showsServers = true
@@ -37,6 +45,8 @@ struct MoreView: View {
             case .roles: RolesView(context: context)
             case .domains: DomainsView(context: context)
             case .logs: LogsView(context: context)
+            case .healthChecks: HealthChecksView(context: context)
+            case .alertRules: AlertRulesView(context: context)
             case .about: AboutView()
             }
         }
@@ -54,7 +64,7 @@ struct MoreView: View {
 }
 
 enum MoreDestination: Hashable {
-    case users, invitations, roles, domains, logs, about
+    case users, invitations, roles, domains, logs, healthChecks, alertRules, about
 }
 
 private struct MenuRow: View {

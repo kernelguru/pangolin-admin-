@@ -9,7 +9,12 @@ Die App spricht ausschließlich mit der **Pangolin Integration API (`/v1`)**.
 |---|---|
 | Übersicht | Sites online/gesamt, Ressourcen-Health, Clients, Traffic, abgelehnte Requests (24 h), ausstehende Freigaben, ungeschützte Ressourcen – Auto-Refresh alle 30 s |
 | Sites | Liste, Filter, Suche, Details, Neustart, Freigeben/Ablehnen, Umbenennen, Löschen |
-| Ressourcen | Liste, Health, Aktivieren/Deaktivieren, SSO, E-Mail-Whitelist, Regeln, Zugriff blockieren, Targets an/aus/löschen, Löschen |
+| Ressourcen | Anlegen (HTTP mit Domain/Subdomain oder TCP/UDP mit Port, optional gleich mit Target), Health, Aktivieren/Deaktivieren, SSO, E-Mail-Whitelist, Zugriff blockieren, Löschen |
+| Targets | Anlegen, Bearbeiten (Site, Protokoll, IP, Port), an/aus, Löschen |
+| Authentifizierung | Passwort, 6-stelliger PIN und Header-Auth setzen, ersetzen, entfernen |
+| Regeln | Anlegen, Bearbeiten, an/aus, Löschen (CIDR, IP, Pfad, Land, ASN, Region, Methode → Erlauben/Blockieren/Weiter) |
+| Health-Checks | Liste mit Status, Anlegen/Bearbeiten (HTTP, TCP, Ping; Intervalle, Schwellwerte), an/aus, Löschen |
+| Alert-Regeln | Liste, Anlegen/Bearbeiten (Ereignis, Quellen, Benutzer/Rollen/E-Mails, Webhooks, Pause), an/aus, Löschen |
 | Clients | Liste, Filter (Geräte/Maschinen/gesperrt), Sperren/Entsperren, Archivieren, Löschen |
 | Benutzer | Liste mit Rollen/2FA, Rollen zuweisen/entziehen, aus Org entfernen, einladen (Link teilen) |
 | Weitere | Einladungen, Rollen, Domains, Protokolle (Anfragen, Zugriffe, Änderungen) |

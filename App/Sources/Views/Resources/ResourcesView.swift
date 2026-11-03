@@ -14,6 +14,7 @@ struct ResourcesView: View {
     @State private var search = ""
     @State private var filter: Filter = .all
     @State private var runner = ActionRunner()
+    @State private var showsCreate = false
 
     private var visible: [PublicResource] {
         (state.value ?? []).filter { r in
@@ -72,7 +73,17 @@ struct ResourcesView: View {
             }
         }
         .navigationTitle("Ressourcen")
-        .toolbar { OrgSwitcherToolbar() }
+        .toolbar {
+            OrgSwitcherToolbar()
+            ToolbarItem(placement: .primaryAction) {
+                Button("Neue Ressource", systemImage: "plus") { showsCreate = true }
+            }
+        }
+        .sheet(isPresented: $showsCreate, onDismiss: { Task { await load() } }) {
+            NavigationStack {
+                CreateResourceView(context: context)
+            }
+        }
         .searchable(text: $search, prompt: "Name oder Domain")
         .refreshable { await load() }
         .task(id: context) { await load() }
