@@ -6,7 +6,7 @@ struct EditorSheet<Content: View>: View {
     let title: String
     var saveTitle: String = "Sichern"
     var canSave: Bool = true
-    let save: () async throws -> Void
+    let save: @MainActor () async throws -> Void
     @ViewBuilder var content: Content
 
     @Environment(\.dismiss) private var dismiss

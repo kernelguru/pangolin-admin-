@@ -133,7 +133,7 @@ struct SiteDetailView: View {
 
     @ViewBuilder
     private func actionButton(_ title: String, systemImage: String, prominent: Bool = false,
-                              _ action: @escaping () async throws -> Void) -> some View {
+                              _ action: @escaping @MainActor () async throws -> Void) -> some View {
         let button = Button {
             Task {
                 if await runner.run(success: title, action) { await reload() }

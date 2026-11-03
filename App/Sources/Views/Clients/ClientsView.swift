@@ -103,7 +103,7 @@ struct ClientsView: View {
         Button("Löschen", systemImage: "trash", role: .destructive) { pendingDelete = client }
     }
 
-    private func perform(_ operation: @escaping () async throws -> Void) {
+    private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
         Task {
             await runner.run(success: UUID().uuidString, operation)
             await load()

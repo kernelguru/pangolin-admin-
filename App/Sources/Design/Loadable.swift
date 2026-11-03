@@ -28,7 +28,7 @@ final class ActionRunner {
 
     /// Runs `operation`; returns `true` on success.
     @discardableResult
-    func run(success: String? = nil, _ operation: () async throws -> Void) async -> Bool {
+    func run(success: String? = nil, _ operation: @MainActor () async throws -> Void) async -> Bool {
         isRunning = true
         successMessage = nil
         defer { isRunning = false }
