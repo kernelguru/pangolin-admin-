@@ -371,7 +371,7 @@ private struct TargetRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Toggle("Aktiv", isOn: Binding(get: { target.enabled }, set: onToggle))
+                Toggle("Aktiv", isOn: Binding(get: { target.enabled }, set: { onToggle($0) }))
                     .labelsHidden()
             }
         }
