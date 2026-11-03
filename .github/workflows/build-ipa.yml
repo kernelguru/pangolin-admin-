@@ -1,0 +1,106 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCHEME: PangolinAdmin
+  APP_NAME: PangolinAdmin
+
+jobs:
+  test-kit:
+    name: PangolinKit tests
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XCODE" ]; then XCODE="/Applications/Xcode.app"; fi
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: swift test
+        run: swift test --package-path Packages/PangolinKit
+
+  build:
+    name: Build IPA
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XCODE" ]; then XCODE="/Applications/Xcode.app"; fi
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"${GITHUB_RUN_NUMBER}\"/" project.yml
+          xcodegen generate
+
+      - name: Build (unsigned, Release, iphoneos)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project "${APP_NAME}.xcodeproj" \
+            -scheme "${SCHEME}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build | tee xcodebuild.log | grep -E "error:|warning:|\*\* BUILD" || true
+          test -d "build/Build/Products/Release-iphoneos/${APP_NAME}.app"
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R "build/Build/Products/Release-iphoneos/${APP_NAME}.app" Payload/
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "Payload/${APP_NAME}.app/Info.plist")"
+          IPA="${APP_NAME}-${VERSION}-${GITHUB_RUN_NUMBER}-unsigned.ipa"
+          /usr/bin/zip -qry "$IPA" Payload
+          echo "IPA=$IPA" >> "$GITHUB_ENV"
+          ls -lh "$IPA"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IPA }}
+          path: ${{ env.IPA }}
+          retention-days: 30
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+
+      - name: Attach IPA to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.IPA }}
