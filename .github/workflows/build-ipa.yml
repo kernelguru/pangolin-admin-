@@ -6,37 +6,28 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "macOS runner label (must have Xcode 26)"
+        required: false
+        default: "macos-15"
 
+# Only superseded pull request runs are cancelled; pushes and manual runs always finish.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   SCHEME: PangolinAdmin
   APP_NAME: PangolinAdmin
 
 jobs:
-  test-kit:
-    name: PangolinKit tests
-    runs-on: macos-26
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode 26
-        run: |
-          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
-          if [ -z "$XCODE" ]; then XCODE="/Applications/Xcode.app"; fi
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
-
-      - name: swift test
-        run: swift test --package-path Packages/PangolinKit
-
   build:
-    name: Build IPA
-    runs-on: macos-26
-    timeout-minutes: 40
+    name: Test & build IPA
+    # macos-15 images ship Xcode 26 and have far more capacity than macos-26.
+    # Override per run (workflow_dispatch input) or per repo (variable MACOS_RUNNER).
+    runs-on: ${{ inputs.runner || vars.MACOS_RUNNER || 'macos-15' }}
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
@@ -44,11 +35,18 @@ jobs:
 
       - name: Select Xcode 26
         run: |
-          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
-          if [ -z "$XCODE" ]; then XCODE="/Applications/Xcode.app"; fi
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1)"
+          if [ -z "$XCODE" ]; then XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"; fi
+          if [ -z "$XCODE" ]; then
+            echo "::error::No Xcode 26 found on this runner. Available:"; ls -d /Applications/Xcode*.app
+            exit 1
+          fi
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
+
+      - name: PangolinKit tests
+        run: swift test --package-path Packages/PangolinKit
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -72,7 +70,14 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
-            build | tee xcodebuild.log | grep -E "error:|warning:|\*\* BUILD" || true
+            build > xcodebuild.log 2>&1 || {
+              echo "::group::Compiler errors"
+              grep -E "error:" xcodebuild.log | sort -u | head -100
+              echo "::endgroup::"
+              tail -50 xcodebuild.log
+              exit 1
+            }
+          grep -E "warning:" xcodebuild.log | sort -u | head -50 || true
           test -d "build/Build/Products/Release-iphoneos/${APP_NAME}.app"
 
       - name: Package IPA
@@ -98,6 +103,7 @@ jobs:
         with:
           name: xcodebuild-log
           path: xcodebuild.log
+          if-no-files-found: ignore
 
       - name: Attach IPA to release
         if: startsWith(github.ref, 'refs/tags/v')
