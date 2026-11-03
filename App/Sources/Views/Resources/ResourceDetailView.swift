@@ -293,7 +293,6 @@ struct ResourceDetailView: View {
             targets = .failed(error.localizedDescription)
         }
     }
-}
 
     private func loadRules() async {
         if rules.value == nil { rules = .loading }
