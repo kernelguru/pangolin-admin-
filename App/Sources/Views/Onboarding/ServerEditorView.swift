@@ -41,9 +41,18 @@ struct ServerEditorView: View {
 
     private var hostName: String { URL(string: baseURL)?.host ?? "Pangolin" }
 
+    private var urlProblem: String? {
+        guard let url = draft.url else { return nil }
+        if url.scheme?.lowercased() == "http" {
+            return "Ohne https:// wird der Schlüssel unverschlüsselt übertragen, und Weiterleitungen auf https können ihn verlieren."
+        }
+        return PangolinConfiguration.urlProblem(url)
+    }
+
     private var canSave: Bool {
         draft.url != nil
             && (existing != nil || !apiKey.isEmpty)
+            && PangolinConfiguration.formatProblem(apiKey: apiKey) == nil
             && (isRootKey || draft.orgId != nil)
     }
 
@@ -60,6 +69,11 @@ struct ServerEditorView: View {
                     Text("Die URL, unter der der Integration-API-Port (Standard 3003) per Reverse Proxy erreichbar ist. „/v1“ wird bei Bedarf ergänzt.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let problem = urlProblem {
+                        Label(problem, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
 
@@ -73,6 +87,11 @@ struct ServerEditorView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.body.monospaced())
+                        if let problem = PangolinConfiguration.formatProblem(apiKey: apiKey) {
+                            Label(problem, systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
                     }
                     Toggle("Root-Schlüssel (Server-Admin)", isOn: $isRootKey)
                     field(isRootKey ? "Standard-Organisation (optional)" : "Organisations-ID",

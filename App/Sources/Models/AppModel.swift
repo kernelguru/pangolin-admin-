@@ -76,8 +76,9 @@ final class AppModel {
 
     /// Saves a profile and its API key (Keychain). Pass `apiKey: nil` to keep the stored key.
     func save(_ profile: ServerProfile, apiKey: String?) throws {
-        if let apiKey, !apiKey.isEmpty {
-            try secrets.save(apiKey, for: profile.keychainAccount)
+        if let apiKey {
+            let cleaned = PangolinConfiguration.sanitize(apiKey: apiKey)
+            if !cleaned.isEmpty { try secrets.save(cleaned, for: profile.keychainAccount) }
         }
         if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
             profiles[index] = profile

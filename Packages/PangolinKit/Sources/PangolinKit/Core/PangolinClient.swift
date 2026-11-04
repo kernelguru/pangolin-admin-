@@ -14,8 +14,39 @@ public struct PangolinConfiguration: Sendable, Equatable {
 
     public init(baseURL: URL, apiKey: String, timeout: TimeInterval = 20) {
         self.baseURL = PangolinConfiguration.normalize(baseURL)
-        self.apiKey = apiKey
+        self.apiKey = PangolinConfiguration.sanitize(apiKey: apiKey)
         self.timeout = timeout
+    }
+
+    /// Removes whitespace, line breaks, surrounding quotes and a pasted `Bearer ` prefix.
+    public static func sanitize(apiKey: String) -> String {
+        var key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if key.lowercased().hasPrefix("bearer ") { key = String(key.dropFirst(7)) }
+        key = key.trimmingCharacters(in: CharacterSet(charactersIn: "\"'` ").union(.whitespacesAndNewlines))
+        return key.filter { !$0.isWhitespace }
+    }
+
+    /// Pangolin keys look like `<keyId>.<secret>`. Returns a German hint if the format is wrong.
+    public static func formatProblem(apiKey: String) -> String? {
+        let key = sanitize(apiKey: apiKey)
+        if key.isEmpty { return nil }
+        let parts = key.split(separator: ".", omittingEmptySubsequences: false)
+        if parts.count != 2 || parts[0].isEmpty || parts[1].isEmpty {
+            return "Ein Pangolin-API-Schlüssel hat das Format „ID.Geheimnis“ (genau ein Punkt). Bitte den vollständigen Schlüssel einfügen, der beim Anlegen einmalig angezeigt wurde."
+        }
+        return nil
+    }
+
+    /// Returns a German hint when the URL looks like the dashboard instead of the Integration API.
+    public static func urlProblem(_ url: URL) -> String? {
+        let path = url.path.lowercased()
+        if path.contains("/api/v1") || path.hasPrefix("/api") {
+            return "„/api/v1“ ist die interne Dashboard-API. Die Integration API läuft auf einem eigenen Port (Standard 3003), z. B. https://api.example.com/v1."
+        }
+        if url.port == 3000 || url.port == 3001 || url.port == 3002 {
+            return "Port \(url.port!) gehört zum Dashboard bzw. zur internen API. Die Integration API läuft standardmäßig auf Port 3003."
+        }
+        return nil
     }
 
     /// Accepts `https://api.example.com`, `https://api.example.com/` or `…/v1` and
@@ -40,9 +71,10 @@ public final class PangolinClient: Sendable {
     public let configuration: PangolinConfiguration
     private let session: URLSession
 
-    public init(configuration: PangolinConfiguration, session: URLSession = .shared) {
+    public init(configuration: PangolinConfiguration, session: URLSession? = nil) {
         self.configuration = configuration
-        self.session = session
+        self.session = session ?? URLSession(configuration: .ephemeral,
+                                             delegate: RedirectAuthDelegate(), delegateQueue: nil)
     }
 
     // MARK: - Request building
@@ -173,6 +205,26 @@ public final class PangolinClient: Sendable {
         case .dataCorrupted(let ctx): return "Ungültige Daten bei \(path(ctx)): \(ctx.debugDescription)"
         @unknown default: return String(describing: error)
         }
+    }
+}
+
+// MARK: - Redirects
+
+/// Keeps the `Authorization` header when the server redirects within the same host
+/// (e.g. `http://` → `https://` by Traefik). Without it Pangolin answers „API key required“.
+final class RedirectAuthDelegate: NSObject, URLSessionTaskDelegate, Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        var redirected = request
+        if let original = task.originalRequest,
+           let auth = original.value(forHTTPHeaderField: "Authorization"),
+           original.url?.host?.lowercased() == request.url?.host?.lowercased() {
+            redirected.setValue(auth, forHTTPHeaderField: "Authorization")
+            // POST/PUT bodies are dropped on 301/302; keep method and body for 307/308 only.
+        }
+        completionHandler(redirected)
     }
 }
 

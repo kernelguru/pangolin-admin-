@@ -34,13 +34,31 @@ public enum PangolinError: Error, Sendable, Equatable {
     }
 }
 
+extension PangolinError {
+    /// Maps Pangolin's 401 messages to an actionable German explanation.
+    static func explainUnauthorized(_ message: String) -> String {
+        switch message.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "api key required":
+            return "Der Server hat keinen API-Schlüssel erhalten. Meist entfernt eine Weiterleitung (http → https) oder ein Proxy den Authorization-Header – bitte die URL direkt mit https:// eintragen. (Server: „\(message)“)"
+        case "invalid api key":
+            return "Der Server kennt diesen API-Schlüssel nicht oder das Geheimnis stimmt nicht. Bitte den vollständigen Schlüssel (Format „ID.Geheimnis“) erneut einfügen – er wird in Pangolin nur einmal angezeigt. (Server: „\(message)“)"
+        case "user not authenticated":
+            return "Die URL zeigt auf die Dashboard-API statt auf die Integration API. Bitte die Adresse des Integration-API-Ports (Standard 3003) verwenden, z. B. https://api.example.com/v1. (Server: „\(message)“)"
+        case "":
+            return "API-Schlüssel abgelehnt (HTTP 401)."
+        default:
+            return "API-Schlüssel abgelehnt (HTTP 401). Server: „\(message)“"
+        }
+    }
+}
+
 extension PangolinError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .invalidURL(let url):
             "Ungültige Server-URL: \(url)"
         case .unauthorized(let message):
-            "API-Schlüssel ungültig oder abgelaufen. \(message)"
+            PangolinError.explainUnauthorized(message)
         case .forbidden(let message):
             "Dem API-Schlüssel fehlt die Berechtigung für diese Aktion. \(message)"
         case .notFound(let message):
