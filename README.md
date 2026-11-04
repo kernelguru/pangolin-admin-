@@ -92,7 +92,7 @@ swift test --package-path Packages/PangolinKit
 
 ### GitHub Actions → unsigned IPA
 
-Der Workflow `.github/workflows/build-ipa.yml` läuft auf `macos-15` mit Xcode 26 (Runner über die Repo-Variable `MACOS_RUNNER` oder beim manuellen Start änderbar) bei jedem Push, Pull Request oder manuell (*Actions → Build unsigned IPA → Run workflow*):
+Der Workflow `.github/workflows/build-ipa.yml` läuft auf `macos-15-intel` mit Xcode 26 (Runner über die Repo-Variable `MACOS_RUNNER` oder beim manuellen Start änderbar) bei jedem Push, Pull Request oder manuell (*Actions → Build unsigned IPA → Run workflow*):
 
 1. `swift test` für PangolinKit
 2. `xcodegen generate`

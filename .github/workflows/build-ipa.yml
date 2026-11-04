@@ -10,7 +10,7 @@ on:
       runner:
         description: "macOS runner label (must have Xcode 26)"
         required: false
-        default: "macos-15"
+        default: "macos-15-intel"
 
 # Only superseded pull request runs are cancelled; pushes and manual runs always finish.
 concurrency:
@@ -24,9 +24,9 @@ env:
 jobs:
   build:
     name: Test & build IPA
-    # macos-15 images ship Xcode 26 and have far more capacity than macos-26.
+    # macos-15-intel ships Xcode 26 and is not affected by the arm64 capacity shortage.
     # Override per run (workflow_dispatch input) or per repo (variable MACOS_RUNNER).
-    runs-on: ${{ inputs.runner || vars.MACOS_RUNNER || 'macos-15' }}
+    runs-on: ${{ inputs.runner || vars.MACOS_RUNNER || 'macos-15-intel' }}
     timeout-minutes: 45
     permissions:
       contents: write
