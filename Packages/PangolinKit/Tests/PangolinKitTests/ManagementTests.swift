@@ -176,3 +176,60 @@ final class ManagementTests: XCTestCase {
         XCTAssertTrue(AlertRuleBody(name: "x", eventType: .siteOffline, allSites: true).hasNoRecipients)
     }
 }
+
+final class ClientListingTests: XCTestCase {
+    override func tearDown() {
+        MockURLProtocol.handler = nil
+        super.tearDown()
+    }
+
+    func testAllClientsMergesUserDevicesAndMachines() async throws {
+        nonisolated(unsafe) var statusByPath: [String: String] = [:]
+        MockURLProtocol.handler = { request in
+            let url = request.url!
+            let status = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "status" }?.value ?? ""
+            statusByPath[url.path] = status
+            if url.path.hasSuffix("/user-devices") {
+                return MockURLProtocol.ok("""
+                {"devices":[{"clientId":5,"name":"iPhone 17 Pro","userId":"u1","username":"marc","online":true,
+                  "type":"olm","deviceModel":"iPhone18,1","fingerprintPlatform":"ios","fingerprintOsVersion":"26.1",
+                  "lastSeen":1730000000,"approvalState":null,"archived":false,"blocked":false}],
+                 "pagination":{"total":1,"page":1,"pageSize":100}}
+                """)
+            }
+            return MockURLProtocol.ok(#"{"clients":[{"clientId":9,"name":"backup-box","userId":null,"online":false}],"pagination":{"total":1,"page":1,"pageSize":100}}"#)
+        }
+
+        let all = try await MockURLProtocol.makeClient().allClients(orgId: "home")
+
+        XCTAssertEqual(all.map(\.clientId), [5, 9])
+        XCTAssertFalse(all[0].isMachine)
+        XCTAssertEqual(all[0].platform, "ios")
+        XCTAssertEqual(all[0].lastSeen, Date(timeIntervalSince1970: 1_730_000_000))
+        XCTAssertTrue(all[1].isMachine)
+        XCTAssertEqual(statusByPath["/v1/org/home/user-devices"], "active,pending,denied,blocked,archived")
+        XCTAssertEqual(statusByPath["/v1/org/home/clients"], "active,blocked,archived")
+    }
+
+    func testAllClientsToleratesOneForbiddenList() async throws {
+        MockURLProtocol.handler = { request in
+            if request.url!.path.hasSuffix("/clients") {
+                return .init(status: 403, body: #"{"message":"Key does not have permission"}"#)
+            }
+            return MockURLProtocol.ok(#"{"devices":[{"clientId":5,"name":"Laptop","userId":"u1"}],"pagination":{"total":1}}"#)
+        }
+        let all = try await MockURLProtocol.makeClient().allClients(orgId: "home")
+        XCTAssertEqual(all.map(\.clientId), [5])
+    }
+
+    func testAllClientsThrowsWhenBothFail() async {
+        MockURLProtocol.handler = { _ in .init(status: 403, body: #"{"message":"nope"}"#) }
+        do {
+            _ = try await MockURLProtocol.makeClient().allClients(orgId: "home")
+            XCTFail("Expected error")
+        } catch {
+            XCTAssertEqual((error as? PangolinError)?.statusCode, 403)
+        }
+    }
+}

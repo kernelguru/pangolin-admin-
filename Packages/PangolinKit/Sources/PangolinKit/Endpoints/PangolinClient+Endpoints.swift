@@ -163,20 +163,48 @@ extension PangolinClient {
 // MARK: - Clients
 
 extension PangolinClient {
-    /// `GET /org/{orgId}/clients`
+    /// `GET /org/{orgId}/clients` – **machine clients only** (clients without a user).
     public func clients(orgId: String, query: ClientQuery = ClientQuery(),
                         page: PageRequest = PageRequest()) async throws -> Page<Client> {
         try await sendList(["org", orgId, "clients"], key: "clients", query: [
             .int("page", page.page),
             .int("pageSize", page.pageSize),
             .string("query", query.search),
-            .bool("online", query.online)
+            .bool("online", query.online),
+            .string("status", query.statusValue)
         ])
     }
 
-    /// All clients of an organization.
-    public func allClients(orgId: String, query: ClientQuery = ClientQuery()) async throws -> [Client] {
-        try await fetchAll { try await self.clients(orgId: orgId, query: query, page: $0) }
+    /// `GET /org/{orgId}/user-devices` – VPN clients (Olm) that belong to users.
+    public func userDevices(orgId: String, query: ClientQuery = ClientQuery(),
+                            page: PageRequest = PageRequest()) async throws -> Page<Client> {
+        try await sendList(["org", orgId, "user-devices"], key: "devices", query: [
+            .int("page", page.page),
+            .int("pageSize", page.pageSize),
+            .string("query", query.search),
+            .bool("online", query.online),
+            .string("status", query.statusValue)
+        ])
+    }
+
+    /// All machine clients and user devices of an organization, in every status
+    /// (active, pending, denied, blocked, archived).
+    public func allClients(orgId: String, search: String? = nil) async throws -> [Client] {
+        let machineQuery = ClientQuery(search: search, statuses: [.active, .blocked, .archived])
+        let deviceQuery = ClientQuery(search: search, statuses: ClientStatus.allCases)
+        async let machines = capture { try await self.fetchAll { try await self.clients(orgId: orgId, query: machineQuery, page: $0) } }
+        async let devices = capture { try await self.fetchAll { try await self.userDevices(orgId: orgId, query: deviceQuery, page: $0) } }
+        let (machineResult, deviceResult) = await (machines, devices)
+
+        // A key may be allowed to list only one of the two kinds – show what is available.
+        switch (deviceResult, machineResult) {
+        case (.failure(let error), .failure):
+            throw error
+        default:
+            var seen = Set<Int>()
+            let all = ((try? deviceResult.get()) ?? []) + ((try? machineResult.get()) ?? [])
+            return all.filter { seen.insert($0.clientId).inserted }
+        }
     }
 
     /// `GET /client/{clientId}`
@@ -316,5 +344,14 @@ extension PangolinClient {
     /// `GET /org/{orgId}/logs/request/export` – raw CSV.
     public func exportRequestLogsCSV(orgId: String, _ query: LogQuery = LogQuery()) async throws -> Data {
         try await sendRaw(.get, ["org", orgId, "logs", "request", "export"], query: query.queryItems)
+    }
+}
+
+/// Runs an operation and returns its result instead of throwing.
+func capture<T: Sendable>(_ operation: @Sendable () async throws -> T) async -> Result<T, Error> {
+    do {
+        return .success(try await operation())
+    } catch {
+        return .failure(error)
     }
 }

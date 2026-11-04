@@ -5,7 +5,8 @@ struct ClientsView: View {
     let context: OrgContext
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all = "Alle", online = "Online", users = "Geräte", machines = "Maschinen", blocked = "Gesperrt"
+        case all = "Alle", online = "Online", users = "Geräte", machines = "Maschinen",
+             pending = "Ausstehend", blocked = "Gesperrt", archived = "Archiviert"
         var id: String { rawValue }
     }
 
@@ -22,13 +23,16 @@ struct ClientsView: View {
             case .online: c.online == true
             case .users: !c.isMachine && c.archived != true
             case .machines: c.isMachine && c.archived != true
+            case .pending: c.approvalState == "pending"
             case .blocked: c.blocked == true
+            case .archived: c.archived == true
             }
             let matchesSearch = search.isEmpty
                 || c.name.localizedCaseInsensitiveContains(search)
                 || (c.username ?? "").localizedCaseInsensitiveContains(search)
                 || (c.userEmail ?? "").localizedCaseInsensitiveContains(search)
                 || (c.subnet ?? "").contains(search)
+                || (c.hostname ?? "").localizedCaseInsensitiveContains(search)
             return matchesFilter && matchesSearch
         }
     }
@@ -140,16 +144,25 @@ private struct ClientRow: View {
                     .frame(width: 40, height: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(client.name).font(.headline).lineLimit(1)
-                        Text(client.username ?? client.userEmail ?? "Maschinen-Client")
+                        Text(client.isMachine ? "Maschinen-Client" : (client.username ?? client.userEmail ?? "Benutzergerät"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                        if let device = client.deviceDescription {
+                            Text(device)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                     Spacer()
                     StatusPill(text: client.statusText, color: client.statusColor)
                 }
                 HStack {
                     Text(client.subnet ?? "–").font(.caption.monospaced())
+                    if client.online != true, let lastSeen = client.lastSeen {
+                        Text("· zuletzt \(Format.relative(lastSeen))").font(.caption2)
+                    }
                     Spacer()
                     Text("↓ \(Format.traffic(client.megabytesIn))  ↑ \(Format.traffic(client.megabytesOut))")
                         .font(.caption2.monospacedDigit())

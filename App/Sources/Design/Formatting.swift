@@ -92,6 +92,26 @@ extension Client {
     }
 }
 
+extension Client {
+    /// „iOS 26.1 · iPhone18,1 · v1.2.0“
+    var deviceDescription: String? {
+        let platformName: String? = switch platform?.lowercased() {
+        case "ios": "iOS"
+        case "ipados": "iPadOS"
+        case "macos": "macOS"
+        case "windows": "Windows"
+        case "android": "Android"
+        case "linux": "Linux"
+        case .some(let other): other
+        case .none: nil
+        }
+        let system = [platformName, osVersion].compactMap { $0 }.joined(separator: " ")
+        let version = (olmVersion ?? agentVersion).map { "v\($0)" }
+        let parts = [system.isEmpty ? nil : system, deviceModel ?? hostname, version].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
 extension String {
     /// `#ff0000` → Color
     var hexColor: Color? {

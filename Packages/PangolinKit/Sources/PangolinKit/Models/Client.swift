@@ -24,6 +24,13 @@ public struct Client: Decodable, Sendable, Hashable, Identifiable {
     public var blocked: Bool?
     public var sites: [ClientSite]
     public var roles: [ClientRole]
+    /// User devices only (`/user-devices`): device fingerprint.
+    public var deviceModel: String?
+    public var platform: String?
+    public var osVersion: String?
+    public var hostname: String?
+    public var lastSeen: Date?
+    public var olmUpdateAvailable: Bool?
 
     /// Machine clients have no associated user.
     public var isMachine: Bool { userId == nil }
@@ -40,7 +47,9 @@ public struct Client: Decodable, Sendable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case clientId, niceId, name, orgId, type, online, subnet, megabytesIn, megabytesOut, olmVersion,
-             agent, agentVersion, userId, username, userEmail, approvalState, archived, blocked, sites, roles
+             agent, agentVersion, userId, username, userEmail, approvalState, archived, blocked, sites, roles,
+             deviceModel, fingerprintPlatform, fingerprintOsVersion, fingerprintHostname, lastSeen,
+             olmUpdateAvailable
     }
 
     public init(from decoder: Decoder) throws {
@@ -68,6 +77,16 @@ public struct Client: Decodable, Sendable, Hashable, Identifiable {
         blocked = c.lenientBool(.blocked)
         sites = c.lenientArray(ClientSite.self, .sites)
         roles = c.lenientArray(ClientRole.self, .roles)
+        deviceModel = c.lenientString(.deviceModel)
+        platform = c.lenientString(.fingerprintPlatform)
+        osVersion = c.lenientString(.fingerprintOsVersion)
+        hostname = c.lenientString(.fingerprintHostname)
+        if let value = c.lenientDouble(.lastSeen) {
+            lastSeen = Date(pangolinTimestamp: value)
+        } else {
+            lastSeen = c.lenientString(.lastSeen).flatMap(Date.init(pangolinString:))
+        }
+        olmUpdateAvailable = c.lenientBool(.olmUpdateAvailable)
     }
 }
 
@@ -101,13 +120,25 @@ public struct ClientRole: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// Filters for `GET /org/{orgId}/clients`.
+/// Client status filter. Pangolin only returns `active` (and `pending` for devices) unless asked.
+public enum ClientStatus: String, Sendable, CaseIterable {
+    case active, pending, denied, blocked, archived
+}
+
+/// Filters for `GET /org/{orgId}/clients` (machine clients) and `/user-devices`.
 public struct ClientQuery: Sendable, Equatable {
     public var search: String?
     public var online: Bool?
+    /// `nil` uses Pangolin's default; the `all…` helpers request every status.
+    public var statuses: [ClientStatus]?
 
-    public init(search: String? = nil, online: Bool? = nil) {
+    public init(search: String? = nil, online: Bool? = nil, statuses: [ClientStatus]? = nil) {
         self.search = search
         self.online = online
+        self.statuses = statuses
+    }
+
+    var statusValue: String? {
+        statuses.map { $0.map(\.rawValue).joined(separator: ",") }
     }
 }
