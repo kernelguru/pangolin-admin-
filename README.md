@@ -19,11 +19,15 @@ Die App spricht ausschließlich mit der **Pangolin Integration API (`/v1`)**.
 | Benutzer | Liste mit Rollen/2FA, Rollen zuweisen/entziehen, aus Org entfernen, einladen (Link teilen) |
 | Weitere | Einladungen, Rollen, Domains, Protokolle (Anfragen, Zugriffe, Änderungen) |
 | Server | Mehrere Server/Organisationen, Root-Key-Unterstützung mit Org-Wechsel |
+| Server-Update (SSH) | Docker-Host per SSH (CA-Zertifikat, Secure-Enclave-Schlüssel), Compose-Datei automatisch finden, neue Versionen (GitHub + Docker-Hub-Prüfung), Update mit Sicherung, Live-Log, Zurückrollen |
 
 ## Projektstruktur
 
 ```
-Packages/PangolinKit/   API-Client (Swift Package, plattformunabhängig, mit Tests)
+Packages/PangolinKit/   Swift Package (plattformunabhängig, mit Tests)
+  Sources/PangolinKit             API-Client für die Integration API
+  Sources/PangolinSSH             SSH-Client (Apple swift-nio-ssh): Zertifikate, Secure Enclave, Exec
+  Sources/PangolinUpdater         Compose-Analyse, Versionssuche, Update-/Rollback-Skripte
   Sources/PangolinKit/Core        HTTP, Envelope, Fehler, tolerantes Decoding
   Sources/PangolinKit/Models      Site, PublicResource, Target, Client, OrgUser, Role, …
   Sources/PangolinKit/Endpoints   Alle Endpunkte als async-Methoden
@@ -108,3 +112,41 @@ Die IPA ist **nicht signiert** und muss vor der Installation signiert werden, z.
 - `/orgs` nur mit Root-Schlüssel.
 - Login per Benutzername/Passwort/SSO ist über die Integration API nicht möglich – nur API-Schlüssel.
 - Die API ist als „pre-release“ markiert; nach Pangolin-Updates bitte Funktion prüfen.
+
+## Server-Update per SSH
+
+Unter **Mehr → Server-Update (SSH)** aktualisiert die App den Docker-Stack von Pangolin.
+
+### Einrichtung
+
+1. **Schlüssel:** In der App „Neuen Schlüssel in der Secure Enclave erzeugen“ (empfohlen – der private Schlüssel verlässt das iPhone nie) oder einen vorhandenen unverschlüsselten OpenSSH-Schlüssel (ed25519/ECDSA) importieren.
+2. **Zertifikat:** Öffentlichen Schlüssel als `pangolin-admin.pub` speichern und mit der SSH-CA signieren:
+   ```bash
+   ssh-keygen -s /pfad/zur/ca -I pangolin-admin-iphone -n <benutzer> -V +52w pangolin-admin.pub
+   ```
+   Inhalt von `pangolin-admin-cert.pub` in der App einfügen. Der Server muss der CA vertrauen (`TrustedUserCAKeys` in `sshd_config`). Alternativ geht der öffentliche Schlüssel in `~/.ssh/authorized_keys`.
+3. **Host-Schlüssel:** Beim ersten Verbinden zeigt die App den Fingerprint des Servers (vergleichen mit `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`). Danach werden nur noch Verbindungen mit genau diesem Schlüssel akzeptiert.
+4. **Rechte:** Der Benutzer braucht Docker-Zugriff (Gruppe `docker` oder root). Sonst nutzt die App `sudo -n` – dafür ist eine NOPASSWD-Regel nötig.
+
+### Ablauf
+
+1. Die App findet den Pangolin-Container und über die Compose-Labels die `docker-compose.yml`.
+2. Für bekannte Images (pangolin inkl. `ee-`/`postgresql-`-Varianten, gerbil, traefik, crowdsec, newt) sucht sie die neueste Version auf GitHub und prüft, ob das Tag auf Docker Hub existiert. Hauptversionssprünge (z. B. Traefik v3 → v4) sind standardmäßig abgewählt.
+3. Update auf dem Server (losgelöst von der SSH-Sitzung, läuft also weiter, wenn die App in den Hintergrund geht):
+   - Sicherung nach `pangolin-admin-backups/<Zeitstempel>/` (Compose-Datei, `.env`, Konfiguration, bei Postgres zusätzlich `pg_dumpall`)
+   - nur die betroffenen `image:`-Zeilen ändern (Zeile wird vorher geprüft), `docker compose config` validieren
+   - `docker compose pull` – der Stack läuft dabei weiter; bei Fehlern wird die Compose-Datei zurückgesetzt
+   - `docker compose stop`, `config/` (inkl. SQLite-Datenbank) konsistent sichern, `docker compose up -d`
+4. Danach prüft die App, ob die Integration API wieder antwortet. Jede Sicherung kann per „Zurückrollen“ wiederhergestellt werden.
+
+### Tests
+
+Die SSH-Tests laufen gegen einen echten OpenSSH-Server mit CA:
+
+```bash
+D=$(mktemp -d) && Packages/PangolinKit/scripts/ssh-test-server.sh "$D"
+PANGOLIN_SSH_TEST_DIR="$D" swift test --package-path Packages/PangolinKit
+kill "$(cat "$D/sshd.pid")"
+```
+
+Die Update-Skripte werden in den Tests tatsächlich mit `/bin/sh` gegen eine Compose-Datei und ein Fake-`docker` ausgeführt.

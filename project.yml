@@ -29,6 +29,11 @@ targets:
       - path: App/Resources
     dependencies:
       - package: PangolinKit
+        product: PangolinKit
+      - package: PangolinKit
+        product: PangolinSSH
+      - package: PangolinKit
+        product: PangolinUpdater
     info:
       path: App/Info.plist
       properties:

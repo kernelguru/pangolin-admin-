@@ -90,6 +90,7 @@ final class AppModel {
 
     func delete(_ profile: ServerProfile) {
         try? secrets.delete(profile.keychainAccount)
+        try? secrets.delete(profile.sshKeychainAccount)
         profiles.removeAll { $0.id == profile.id }
         persistProfiles()
         if activeProfileID == profile.id {
@@ -106,6 +107,28 @@ final class AppModel {
 
     func storedAPIKey(for profile: ServerProfile) -> String? {
         (try? secrets.read(profile.keychainAccount)) ?? nil
+    }
+
+    // MARK: SSH
+
+    /// The SSH private key (serialized) of a profile, from the Keychain.
+    func sshKey(for profile: ServerProfile) -> String? {
+        (try? secrets.read(profile.sshKeychainAccount)) ?? nil
+    }
+
+    func saveSSHKey(_ serialized: String?, for profile: ServerProfile) throws {
+        if let serialized {
+            try secrets.save(serialized, for: profile.sshKeychainAccount)
+        } else {
+            try secrets.delete(profile.sshKeychainAccount)
+        }
+    }
+
+    /// Updates only the SSH settings of a profile.
+    func updateSSH(_ settings: SSHSettings?, for profileID: UUID) {
+        guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { return }
+        profiles[index].ssh = settings
+        persistProfiles()
     }
 
     // MARK: Connection

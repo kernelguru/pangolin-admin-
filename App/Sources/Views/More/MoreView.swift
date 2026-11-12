@@ -27,6 +27,9 @@ struct MoreView: View {
                 }
             }
 
+            GlassSectionHeader(title: "Server", systemImage: "server.rack")
+            link("Server-Update (SSH)", systemImage: "arrow.triangle.2.circlepath.circle", destination: .serverUpdate)
+
             GlassSectionHeader(title: "App", systemImage: "gearshape")
             Button {
                 showsServers = true
@@ -47,6 +50,7 @@ struct MoreView: View {
             case .logs: LogsView(context: context)
             case .healthChecks: HealthChecksView(context: context)
             case .alertRules: AlertRulesView(context: context)
+            case .serverUpdate: ServerUpdateView(context: context)
             case .about: AboutView()
             }
         }
@@ -64,7 +68,7 @@ struct MoreView: View {
 }
 
 enum MoreDestination: Hashable {
-    case users, invitations, roles, domains, logs, healthChecks, alertRules, about
+    case users, invitations, roles, domains, logs, healthChecks, alertRules, serverUpdate, about
 }
 
 private struct MenuRow: View {
